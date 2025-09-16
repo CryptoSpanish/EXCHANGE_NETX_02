@@ -280,10 +280,13 @@ function demo(){
 }
 
 /* ---------- eventos ---------- */
-$('#btnLoad').addEventListener('click', cargar);
-$('#btnDemo').addEventListener('click', demo);
-window.addEventListener('DOMContentLoaded', demo);
+document.addEventListener('DOMContentLoaded', () => {
+  $('#btnLoad').addEventListener('click', cargar);
+  $('#btnDemo').addEventListener('click', demo);
+  demo(); // carga automática de demo
+});
 </script>
 </body>
 </html>
+
 
