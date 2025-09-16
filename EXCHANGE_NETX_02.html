@@ -6,7 +6,91 @@
 <title>NETX • Quantum Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@300;400;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script defer>
+<style>
+  :root{--bg0:#131b2b;--bg1:#1a2332;--panel:rgba(26,35,59,.85);--accent:#00e0ff;--green:#2ed573;--red:#ff4757;--text:#c8d6f5;--muted:#8a99b5}
+  body{margin:0;height:100%;font-family:Oxanium,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+       background:radial-gradient(120% 120% at 100% 0%,rgba(94,224,255,.15) 0%,transparent 60%),
+                 radial-gradient(120% 120% at 0% 0%,rgba(46,213,115,.1) 0%,transparent 60%),
+                 linear-gradient(180deg,var(--bg0),var(--bg1));color:var(--text)}
+  .card{background:var(--panel);border:1px solid #2b3a66;border-radius:14px;padding:18px;margin:12px auto;max-width:1200px;backdrop-filter:saturate(120%) blur(12px)}
+  .title{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:22px;font-weight:700}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap}
+  .toolbar input{flex:1;min-width:220px;background:#0f1730;color:var(--text);border:1px solid #2b3a66;border-radius:8px;padding:8px 12px}
+  .toolbar button{background:#1f2a4a;color:var(--text);border:1px solid #3a4a76;border-radius:8px;padding:8px 14px;cursor:pointer}
+  .toolbar button:hover{background:#2b3a66}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px}
+  .kpi{background:#0f1730;border:1px solid #1b2a4a;border-radius:10px;padding:12px;text-align:center}
+  .kpi h3{margin:0 0 6px;font-size:12px;color:var(--muted);letter-spacing:.5px}
+  .kpi .num{font-size:22px;font-weight:700}
+  .num.green{color:var(--green)}.num.red{color:var(--red)}
+  .grid-2{display:grid;grid-template-columns:2fr 1fr;gap:14px}
+  canvas{background:#0f1730;border-radius:10px;border:1px solid #1b2a4a;width:100%!important;height:240px!important}
+  /* --- 3 bloques históricos --- */
+  .histGrid       {display:grid;grid-template-columns:repeat(3,1fr);gap:2px;margin-top:12px}
+  .histBlock      {padding:12px;border-radius:0 0 8px 8px}
+  .histBlock.general{ background:#14223a }
+  .histBlock.mexc { background:#1c2f50 }
+  .histBlock.gate { background:#24375c }
+  .histTitle      {font-size:15px;font-weight:700;margin-bottom:8px;color:#8ea0d3;letter-spacing:.5px}
+  .histBlock table{width:100%;font-size:11px;border-collapse:collapse}
+  .histBlock th,.histBlock td{padding:4px 6px;text-align:right}
+  .histBlock thead th{background:rgba(0,0,0,.25);color:#a8b5d1;font-weight:600}
+  .histBlock tbody tr:nth-child(even){background:rgba(0,0,0,.15)}
+  @media(max-width:900px){.grid-2,.histGrid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="title">NETX • Quantum Dashboard</div>
+  <div class="toolbar">
+    <input id="url" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ5_vj0N0J3zPksJ4zZ4K4J4J4J4J4J4J4J4/pub?output=tsv"/>
+    <button id="btnLoad">📊 Cargar datos</button>
+    <button id="btnDemo">🎯 Demo</button>
+  </div>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><h3>PRECIO $NETX</h3><div id="kpiPrecio" class="num">-</div></div>
+  <div class="kpi"><h3>TRADES TOTALES</h3><div id="kpiTrades" class="num">-</div></div>
+  <div class="kpi"><h3>$NETX COMPRADOS</h3><div id="kpiComprados" class="num green">-</div></div>
+  <div class="kpi"><h3>$NETX VENDIDOS</h3><div id="kpiVendidos" class="num red">-</div></div>
+  <div class="kpi"><h3>VOL $NETX</h3><div id="kpiVolNetx" class="num">-</div></div>
+  <div class="kpi"><h3>VOL USDT</h3><div id="kpiVolUsdt" class="num">-</div></div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="title">Precio & Volumen</div>
+    <canvas id="chart"></canvas>
+  </div>
+  <div class="card">
+    <div class="title">Por exchange (último día)</div>
+    <table id="tblEx"></table>
+    <div id="lblFecha" style="margin-top:8px;font-size:11px;color:var(--muted)">-</div>
+  </div>
+</div>
+
+<!-- 3 BLOQUES HISTÓRICOS -->
+<div class="card" style="padding:0;overflow:hidden">
+  <div class="title" style="padding:18px 18px 0 18px">Histórico diario</div>
+  <div class="histGrid">
+    <div class="histBlock general">
+      <div class="histTitle">Resumen General</div>
+      <table id="tblGeneral"></table>
+    </div>
+    <div class="histBlock mexc">
+      <div class="histTitle">MEXC</div>
+      <table id="tblMexc"></table>
+    </div>
+    <div class="histBlock gate">
+      <div class="histTitle">Gate.io</div>
+      <table id="tblGate"></table>
+    </div>
+  </div>
+</div>
+
+<script>
 /* ---------- helpers ---------- */
 const $ = q => document.getElementById(q);
 const fmt  = n => new Intl.NumberFormat('es-ES',{maximumFractionDigits:0}).format(n);
@@ -197,13 +281,15 @@ function demo(){
 
 /* ---------- eventos ---------- */
 document.addEventListener('DOMContentLoaded', () => {
-  $('#btnLoad').addEventListener('click', cargar);
-  $('#btnDemo').addEventListener('click', demo);
-  demo(); // carga automática de demo
+  document.getElementById('btnLoad').addEventListener('click', cargar);
+  document.getElementById('btnDemo').addEventListener('click', demo);
+  demo(); // carga demo al inicio
 });
+
 </script>
 </body>
 </html>
+
 
 
 
