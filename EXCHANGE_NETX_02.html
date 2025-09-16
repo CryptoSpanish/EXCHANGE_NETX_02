@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>NETX • Quantum Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@300;400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
+        integrity="sha384-R0mG5ln6rI0E6n0Zt8o6qZdX6y1d4h5g6j7k8l9m0n1o2p3q4r5s6t7u8v9w0x1y2z3"
+        crossorigin="anonymous"></script>
+<style>
+  :root{--bg0:#131b2b;--bg1:#1a2332;--panel:rgba(26,35,59,.85);--accent:#00e0ff;--green:#2ed573;--red:#ff4757;--text:#c8d6f5;--muted:#8a99b5}
+  body{margin:0;height:100%;font-family:Oxanium,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+       background:radial-gradient(120% 120% at 100% 0%,rgba(94,224,255,.15) 0%,transparent 60%),
+                 radial-gradient(120% 120% at 0% 0%,rgba(46,213,115,.1) 0%,transparent 60%),
+                 linear-gradient(180deg,var(--bg0),var(--bg1));color:var(--text)}
+  .card{background:var(--panel);border:1px solid #2b3a66;border-radius:14px;padding:18px;margin:12px auto;max-width:1200px;backdrop-filter:saturate(120%) blur(12px)}
+  .title{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:22px;font-weight:700}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap}
+  .toolbar input{flex:1;min-width:220px;background:#0f1730;color:var(--text);border:1px solid #2b3a66;border-radius:8px;padding:8px 12px}
+  .toolbar button{background:#1f2a4a;color:var(--text);border:1px solid #3a4a76;border-radius:8px;padding:8px 14px;cursor:pointer}
+  .toolbar button:hover{background:#2b3a66}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px}
+  .kpi{background:#0f1730;border:1px solid #1b2a4a;border-radius:10px;padding:12px;text-align:center}
+  .kpi h3{margin:0 0 6px;font-size:12px;color:var(--muted);letter-spacing:.5px}
+  .kpi .num{font-size:22px;font-weight:700}
+  .num.green{color:var(--green)}.num.red{color:var(--red)}
+  .grid-2{display:grid;grid-template-columns:2fr 1fr;gap:14px}
+  canvas{background:#0f1730;border-radius:10px;border:1px solid #1b2a4a;width:100%!important;height:240px!important}
+  /* --- 3 bloques históricos --- */
+  .histGrid       {display:grid;grid-template-columns:repeat(3,1fr);gap:2px;margin-top:12px}
+  .histBlock      {padding:12px;border-radius:0 0 8px 8px}
+  .histBlock.general{ background:#14223a }
+  .histBlock.mexc { background:#1c2f50 }
+  .histBlock.gate { background:#24375c }
+  .histTitle      {font-size:15px;font-weight:700;margin-bottom:8px;color:#8ea0d3;letter-spacing:.5px}
+  .histBlock table{width:100%;font-size:11px;border-collapse:collapse}
+  .histBlock th,.histBlock td{padding:4px 6px;text-align:right}
+  .histBlock thead th{background:rgba(0,0,0,.25);color:#a8b5d1;font-weight:600}
+  .histBlock tbody tr:nth-child(even){background:rgba(0,0,0,.15)}
+  @media(max-width:900px){.grid-2,.histGrid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="title">NETX • Quantum Dashboard</div>
+  <div class="toolbar">
+    <input id="url" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ5_vj0N0J3zPksJ4zZ4K4J4J4J4J4J4J4J4/pub?output=tsv"/>
+    <button id="btnLoad">📊 Cargar datos</button>
+    <button id="btnDemo">🎯 Demo</button>
+  </div>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><h3>PRECIO $NETX</h3><div id="kpiPrecio" class="num">-</div></div>
+  <div class="kpi"><h3>TRADES TOTALES</h3><div id="kpiTrades" class="num">-</div></div>
+  <div class="kpi"><h3>$NETX COMPRADOS</h3><div id="kpiComprados" class="num green">-</div></div>
+  <div class="kpi"><h3>$NETX VENDIDOS</h3><div id="kpiVendidos" class="num red">-</div></div>
+  <div class="kpi"><h3>VOL $NETX</h3><div id="kpiVolNetx" class="num">-</div></div>
+  <div class="kpi"><h3>VOL USDT</h3><div id="kpiVolUsdt" class="num">-</div></div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="title">Precio & Volumen</div>
+    <canvas id="chart"></canvas>
+  </div>
+  <div class="card">
+    <div class="title">Por exchange (último día)</div>
+    <table id="tblEx"></table>
+    <div id="lblFecha" style="margin-top:8px;font-size:11px;color:var(--muted)">-</div>
+  </div>
+</div>
+
+<!-- 3 BLOQUES HISTÓRICOS -->
+<div class="card" style="padding:0;overflow:hidden">
+  <div class="title" style="padding:18px 18px 0 18px">Histórico diario</div>
+  <div class="histGrid">
+    <div class="histBlock general">
+      <div class="histTitle">Resumen General</div>
+      <table id="tblGeneral"></table>
+    </div>
+    <div class="histBlock mexc">
+      <div class="histTitle">MEXC</div>
+      <table id="tblMexc"></table>
+    </div>
+    <div class="histBlock gate">
+      <div class="histTitle">Gate.io</div>
+      <table id="tblGate"></table>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- helpers ---------- */
+const $ = q => document.getElementById(q);
+const fmt  = n => new Intl.NumberFormat('es-ES',{maximumFractionDigits:0}).format(n);
+const fmt2 = n => new Intl.NumberFormat('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+const toNum = x => {
+  if (x == null) return null;
+  const s = String(x).trim().replace(/\./g,'').replace(',','.');
+  return isFinite(+s) ? +s : null;
+};
+function el(tag,txt){
+  const e = document.createElement(tag);
+  e.textContent = txt;
+  return e;
+}
+
+/* ---------- parse TSV ---------- */
+function parseTSV(tsv){
+  const [head,...lines] = tsv.trim().split('\n');
+  const h = head.split('\t');
+  const data = lines.map(l => {
+    const o = {};
+    l.split('\t').forEach((v,i) => o[h[i]] = v);
+    return o;
+  });
+  return {headers:h, data};
+}
+
+/* ---------- fetch ---------- */
+async function cargar(){
+  const u = $('url').value.trim();
+  if(!u) return;
+  try {
+    const r = await fetch(u,{cache:'no-store'});
+    if(!r.ok) throw new Error(r.status);
+    const tsv = await r.text();
+    window.DATA = parseTSV(tsv);
+    render(window.DATA);
+  } catch(e){
+    alert('Error al cargar: '+e.message);
+  }
+}
+
+/* ---------- render principal ---------- */
+let CHART;
+function render({headers,h}={}){
+  if(!window.DATA || !window.DATA.data.length) return;
+  const D = window.DATA.data;
+  const last = D[D.length-1];
+
+  /* KPIs */
+  const precio   = toNum(last.precio);
+  const trades   = toNum(last.trades_total);
+  const comprados= toNum(last.comprados_total);
+  const vendidos = toNum(last.vendidos_total);
+  const volNetx  = toNum(last.vol_netx_total);
+  const volUsdt  = toNum(last.vol_usdt_total);
+  $('kpiPrecio').textContent   = precio   != null ? '$'+fmt2(precio) : '-';
+  $('kpiTrades').textContent   = trades   != null ? fmt(trades) : '-';
+  $('kpiComprados').textContent= comprados!= null ? fmt(comprados): '-';
+  $('kpiVendidos').textContent = vendidos != null ? fmt(vendidos) : '-';
+  $('kpiVolNetx').textContent  = volNetx  != null ? fmt(volNetx)  : '-';
+  $('kpiVolUsdt').textContent  = volUsdt  != null ? fmt(volUsdt)  : '-';
+  $('lblFecha').textContent = 'Último: '+(last.fecha||last.Fecha||'-');
+
+  /* Tabla exchange */
+  const tbl = $('tblEx');
+  tbl.innerHTML = '';
+  const mkRow = (ex, pre) => {
+    const r = tbl.insertRow();
+    r.appendChild(el('td',ex));
+    r.appendChild(el('td',fmt(toNum(last[pre+'_trades'])||0)));
+    r.appendChild(el('td',fmt(toNum(last[pre+'_comprados'])||0)));
+    r.appendChild(el('td',fmt(toNum(last[pre+'_vendidos'])||0)));
+    r.appendChild(el('td',fmt(toNum(last[pre+'_vol_netx'])||0)));
+    r.appendChild(el('td',fmt(toNum(last[pre+'_vol_usdt'])||0)));
+  };
+  mkRow('MEXC','mexc');
+  mkRow('Gate','gate');
+
+  /* Gráfico */
+  const labels = D.map(r => r.fecha||r.Fecha||'');
+  const prices = D.map(r => toNum(r.precio)||0);
+  const vols   = D.map(r => toNum(r.vol_netx_total)||0);
+  const cfg = {
+    type:'line',
+    data:{
+      labels,
+      datasets:[{
+        label:'Precio $NETX',
+        data:prices,
+        borderColor:'#00e0ff',
+        backgroundColor:'rgba(0,224,255,.1)',
+        tension:.25,
+        yAxisID:'y'
+      },{
+        label:'Vol $NETX',
+        data:vols,
+        type:'bar',
+        backgroundColor:'rgba(46,213,115,.4)',
+        borderColor:'#2ed573',
+        borderWidth:0,
+        yAxisID:'y1'
+      }]
+    },
+    options:{
+      responsive:true,
+      interaction:{mode:'index',intersect:false},
+      scales:{
+        y:{type:'linear',display:true,position:'left', grid:{color:'#1b2a4a'}, ticks:{color:'#8a99b5'}},
+        y1:{type:'linear',display:true,position:'right', grid:{drawOnChartArea:false}, ticks:{color:'#8a99b5'}}
+      },
+      plugins:{legend:{labels:{color:'#8a99b5'}}}
+    }
+  };
+  if(CHART) CHART.destroy();
+  CHART = new Chart($('chart'),cfg);
+
+  /* 3 bloques históricos */
+  renderHistoricTables();
+}
+
+/* ---------- 3 bloques históricos ---------- */
+function renderHistoricTables(){
+  if(!window.DATA || !window.DATA.data.length) return;
+  const D = window.DATA.data.slice().reverse(); // cronológico ascendente
+
+  function buildTable(id, cols){
+    const t = $(id);
+    t.innerHTML = '';
+    const hRow = t.insertRow();
+    cols.forEach(c => hRow.appendChild(el('th',c.label)));
+    D.forEach(r=>{
+      const fila = t.insertRow();
+      cols.forEach(c=>{
+        const v = toNum(r[c.key]) ?? r[c.key] ?? '';
+        fila.appendChild(el('td', c.fmt ? c.fmt(v) : v));
+      });
+    });
+  }
+
+  /* General */
+  buildTable('tblGeneral',[
+    {key:'fecha',        label:'Fecha'},
+    {key:'precio',       label:'Precio',       fmt:v=>'$'+fmt2(v)},
+    {key:'trades_total', label:'Trades',       fmt:fmt},
+    {key:'vol_netx_total',label:'Vol NETX',    fmt:fmt},
+    {key:'vol_usdt_total',label:'Vol USDT',    fmt:fmt}
+  ]);
+
+  /* MEXC */
+  buildTable('tblMexc',[
+    {key:'fecha',           label:'Fecha'},
+    {key:'mexc_trades',     label:'Trades',    fmt:fmt},
+    {key:'mexc_comprados',  label:'Comprados', fmt:fmt},
+    {key:'mexc_vendidos',   label:'Vendidos',  fmt:fmt},
+    {key:'mexc_vol_netx',   label:'Vol NETX',  fmt:fmt},
+    {key:'mexc_vol_usdt',   label:'Vol USDT',  fmt:fmt}
+  ]);
+
+  /* Gate */
+  buildTable('tblGate',[
+    {key:'fecha',           label:'Fecha'},
+    {key:'gate_trades',     label:'Trades',    fmt:fmt},
+    {key:'gate_comprados',  label:'Comprados', fmt:fmt},
+    {key:'gate_vendidos',   label:'Vendidos',  fmt:fmt},
+    {key:'gate_vol_netx',   label:'Vol NETX',  fmt:fmt},
+    {key:'gate_vol_usdt',   label:'Vol USDT',  fmt:fmt}
+  ]);
+}
+
+/* ---------- demo ---------- */
+function demo(){
+  window.DATA = {
+    headers:['fecha','precio','mexc_trades','mexc_comprados','mexc_vendidos','mexc_vol_netx','mexc_vol_usdt',
+             'gate_trades','gate_comprados','gate_vendidos','gate_vol_netx','gate_vol_usdt',
+             'trades_total','comprados_total','vendidos_total','vol_netx_total','vol_usdt_total'],
+    data:[
+      {fecha:'2025-09-17',precio:'0,0045',mexc_trades:'6811',mexc_comprados:'120347,13',mexc_vendidos:'130000,20',mexc_vol_netx:'250347,33',mexc_vol_usdt:'1126,56',
+       gate_trades:'6688',gate_comprados:'36262,5',gate_vendidos:'45000',gate_vol_netx:'81262,5',gate_vol_usdt:'365,68',
+       trades_total:'13499',comprados_total:'156609,63',vendidos_total:'175000,20',vol_netx_total:'331609,83',vol_usdt_total:'1492,24'},
+      {fecha:'2025-09-16',precio:'0,0043',mexc_trades:'6500',mexc_comprados:'110000',mexc_vendidos:'125000',mexc_vol_netx:'235000',mexc_vol_usdt:'1010',
+       gate_trades:'6000',gate_comprados:'35000',gate_vendidos:'40000',gate_vol_netx:'75000',gate_vol_usdt:'322,5',
+       trades_total:'12500',comprados_total:'145000',vendidos_total:'165000',vol_netx_total:'310000',vol_usdt_total:'1332,5'}
+    ]
+  };
+  render(window.DATA);
+}
+
+/* ---------- eventos ---------- */
+$('#btnLoad').addEventListener('click', cargar);
+$('#btnDemo').addEventListener('click', demo);
+window.addEventListener('DOMContentLoaded', demo);
+</script>
+</body>
